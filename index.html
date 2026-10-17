@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Aurora Geo Geusser</title>
-  <meta name="description" content="A GeoGuesser-style game featuring sports landmarks across Aurora, Ontario." />
+  <title>Aurora Sports Geo-Guesser | GIS Day 2026</title>
+  <meta name="description" content="A GeoGuesser-style game featuring sports landmarks across Aurora, Ontario. GIS Day 2026." />
   <meta name="theme-color" content="#006838" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23006838'/%3E%3Cpolygon points='7 15 25 7 17 25 15 17 7 15' fill='none' stroke='%23FFD200' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E" />
 
   <!-- Fonts -->
@@ -18,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    /* ---------- Brand colours: edit these two to re-theme ---------- */
+    /* ---------- Brand colours: edit these to re-theme ---------- */
     :root {
       --primary: #006838;            /* Aurora Green */
       --primary-fg: #FFD200;         /* Aurora Gold  */
@@ -31,25 +33,34 @@
       --radius: 10px;
       --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
       color-scheme: light;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
     [hidden] { display: none !important; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     html, body { margin: 0; height: 100%; }
     body {
       font-family: var(--font-sans);
       color: var(--zinc-900);
       background: var(--zinc-50);
       -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
     }
     h1, h2, p { margin: 0; }
+    button { touch-action: manipulation; }
     svg.icon { display: block; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
     .label {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
       letter-spacing: .1em; color: var(--zinc-400);
     }
+
+    /* ================= Base = phone portrait ================= */
 
     /* ---------- App shell ---------- */
     .app {
@@ -60,37 +71,42 @@
 
     header {
       background: #fff; border-bottom: 1px solid var(--zinc-200);
-      padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
-      gap: 8px; flex-shrink: 0; position: relative; z-index: 10;
+      padding: max(10px, var(--safe-t)) max(16px, var(--safe-r)) 10px max(16px, var(--safe-l));
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; flex-shrink: 0; position: relative; z-index: 10;
     }
-    .brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-    .brand-icon { background: var(--primary); padding: 8px; border-radius: 8px; color: #fff; flex-shrink: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .brand-icon { background: var(--primary); padding: 7px; border-radius: 8px; color: #fff; flex-shrink: 0; }
     .brand-icon svg { width: 20px; height: 20px; }
     .brand-text { min-width: 0; }
     .brand h1 {
-      font-size: 16px; line-height: 24px; font-weight: 700; letter-spacing: -.025em;
+      font-size: 15px; line-height: 20px; font-weight: 700; letter-spacing: -.025em;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .brand p {
-      font-size: 10px; line-height: 15px; color: var(--zinc-500); font-weight: 500;
+      font-size: 10px; line-height: 15px; color: var(--zinc-500); font-weight: 600;
       text-transform: uppercase; letter-spacing: .05em;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .h1-event { display: none; }       /* "GIS Day 2026" sits in the subtitle on phones */
+    .sub-event { color: var(--primary); }
     .stats { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .stat { text-align: right; }
     .stat-value { font-family: var(--font-mono); font-size: 14px; line-height: 20px; font-weight: 700; }
     .stat-value.accent { color: var(--primary); }
     .stat-progress { display: none; }
+    @media (max-width: 399px) { .lbl-total { display: none; } }
 
     main { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
 
     footer {
       background: #fff; border-top: 1px solid var(--zinc-200);
-      padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 4px 16px; flex-shrink: 0; position: relative; z-index: 10;
+      padding: 8px max(16px, var(--safe-r)) max(8px, var(--safe-b)) max(16px, var(--safe-l));
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-shrink: 0; position: relative; z-index: 10;
     }
-    footer .label { color: var(--zinc-400); }
-    .live { display: flex; align-items: center; gap: 6px; }
+    footer > .label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .live { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .live .label { color: var(--zinc-500); }
     .dot { width: 8px; height: 8px; border-radius: 999px; background: #22c55e; }
 
@@ -105,32 +121,35 @@
       width: 100%; border-radius: var(--radius);
       font-family: inherit; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
       transition: background-color .15s, color .15s, opacity .15s, box-shadow .15s, transform .05s;
-      user-select: none; -webkit-tap-highlight-color: transparent;
+      user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
     }
     .btn:active:not(:disabled) { transform: translateY(1px); }
     .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 45%, transparent); }
     .btn:disabled { opacity: .5; pointer-events: none; }
-    .btn svg { width: 24px; height: 24px; transition: transform .15s; }
-    .btn:hover svg.nudge { transform: translateX(4px); }
+    .btn svg { width: 22px; height: 22px; transition: transform .15s; }
 
     .btn-primary {
       background: var(--primary); color: var(--primary-fg);
-      height: 48px; font-size: 16px;
+      height: 48px; font-size: 15px;
       box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in srgb, var(--primary) 20%, transparent);
     }
-    .btn-primary:hover { opacity: .9; }
     .btn-secondary {
       background: var(--secondary); color: var(--secondary-fg);
-      height: 56px; font-size: 18px;
+      height: 52px; font-size: 16px;
       box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--secondary) 20%, transparent), 0 4px 6px -4px color-mix(in srgb, var(--secondary) 20%, transparent);
     }
-    .btn-secondary:hover { background: color-mix(in srgb, var(--secondary) 90%, transparent); }
     .btn-outline {
       background: #fff; color: var(--primary); border: 2px solid var(--primary);
       height: 48px; font-size: 14px;
     }
     .btn-outline svg { width: 16px; height: 16px; }
-    .btn-outline:hover { background: var(--primary); color: var(--primary-fg); }
+    .btn-outline:active { background: var(--primary); color: var(--primary-fg); }
+    @media (hover: hover) {
+      .btn-primary:hover { opacity: .9; }
+      .btn-secondary:hover { background: color-mix(in srgb, var(--secondary) 90%, transparent); }
+      .btn-outline:hover { background: var(--primary); color: var(--primary-fg); }
+      .btn:hover svg.nudge { transform: translateX(4px); }
+    }
 
     .badge {
       display: inline-flex; align-items: center; height: 20px; padding: 2px 8px;
@@ -142,144 +161,253 @@
     /* ---------- Overlays (start + game over) ---------- */
     .overlay {
       position: absolute; inset: 0; z-index: 20;
-      display: flex; align-items: center; justify-content: center; padding: 24px;
-      overflow-y: auto;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px max(16px, var(--safe-r)) 16px max(16px, var(--safe-l));
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .overlay-start { background: rgba(24,24,27,.05); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
     .overlay-over  { background: rgba(24,24,27,.10); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 30; }
 
-    .start-card { max-width: 448px; width: 100%; padding: 24px 16px 16px; margin: auto; }
-    .start-head { text-align: center; display: grid; gap: 16px; }
+    .start-card { max-width: 448px; width: 100%; padding: 20px 16px 16px; margin: auto; }
+    .start-head { text-align: center; display: grid; gap: 14px; }
     .target-bubble {
-      margin: 0 auto; width: fit-content; padding: 16px; border-radius: 999px;
+      margin: 0 auto; width: fit-content; padding: 14px; border-radius: 999px;
       background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);
     }
-    .target-bubble svg { width: 48px; height: 48px; }
+    .target-bubble svg { width: 40px; height: 40px; }
     .start-title {
-      font-size: 30px; line-height: 36px; font-weight: 900; font-style: italic;
+      font-size: 26px; line-height: 32px; font-weight: 900; font-style: italic;
       text-transform: uppercase; letter-spacing: -.05em;
     }
-    .start-desc { color: var(--zinc-600); font-size: 16px; line-height: 24px; margin-top: 8px; }
-    .start-body { display: grid; gap: 24px; margin-top: 16px; }
-    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .stat-box { background: var(--zinc-50); padding: 16px; border-radius: 14px; border: 1px solid var(--zinc-100); }
-    .stat-box .big { font-size: 24px; line-height: 32px; font-weight: 900; color: var(--primary); }
-    .stat-box .label { font-size: 12px; line-height: 16px; }
+    .start-desc { color: var(--zinc-600); font-size: 15px; line-height: 22px; margin-top: 6px; }
+    .start-body { display: grid; gap: 20px; margin-top: 16px; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-box { background: var(--zinc-50); padding: 12px 14px; border-radius: 14px; border: 1px solid var(--zinc-100); }
+    .stat-box .big { font-size: 22px; line-height: 30px; font-weight: 900; color: var(--primary); }
+    .stat-box .label { font-size: 11px; line-height: 16px; }
 
     .over-card { max-width: 512px; width: 100%; margin: auto; }
-    .over-head { background: var(--primary); color: var(--primary-fg); padding: 32px; text-align: center; }
-    .over-head svg { width: 64px; height: 64px; margin: 0 auto 16px; }
+    .over-head { background: var(--primary); color: var(--primary-fg); padding: 24px 20px; text-align: center; }
+    .over-head svg { width: 48px; height: 48px; margin: 0 auto 12px; }
     .over-head h2 {
-      font-size: 36px; line-height: 40px; font-weight: 900; font-style: italic;
+      font-size: 28px; line-height: 1.1; font-weight: 900; font-style: italic;
       text-transform: uppercase; letter-spacing: -.05em; margin-bottom: 8px;
     }
-    .over-head p { font-weight: 500; opacity: .9; }
-    .over-body { padding: 32px; display: grid; gap: 32px; }
+    .over-head p { font-weight: 500; opacity: .9; font-size: 15px; }
+    .over-body { padding: 24px 20px; display: grid; gap: 24px; }
     .final { text-align: center; }
     .final .label { font-size: 12px; line-height: 16px; margin-bottom: 4px; }
-    .final-score { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
+    .final-score { font-size: 56px; line-height: 1; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
     .over-msg { text-align: center; font-size: 14px; color: var(--zinc-500); font-weight: 500; font-style: italic; margin-bottom: 16px; }
 
     /* ---------- Game layout ---------- */
     .game { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
     .panel {
-      width: 100%; height: 45vh; height: 45dvh; flex-shrink: 0;
+      flex: 0 0 auto; max-height: 50vh; max-height: 50dvh;
       background: #fff; border-bottom: 1px solid var(--zinc-200);
       display: flex; flex-direction: column; position: relative; z-index: 10;
+      padding-left: var(--safe-l); padding-right: var(--safe-r);
     }
-    .panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
-    .panel-body > * + * { margin-top: 12px; }
+    .panel-body {
+      flex: 0 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 12px 16px;
+    }
+    .panel-body > * + * { margin-top: 10px; }
+
+    /* Phone: thumbnail beside the question text */
+    .q-top { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
     .photo {
-      position: relative; aspect-ratio: 16 / 9; max-height: 25vh; width: 100%;
-      border-radius: 14px; overflow: hidden;
+      position: relative; aspect-ratio: 4 / 3; width: 100%;
+      border-radius: 12px; overflow: hidden;
       background: var(--zinc-100); border: 1px solid var(--zinc-200);
       box-shadow: inset 0 2px 4px rgba(0,0,0,.05);
     }
     .photo .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--zinc-400); }
-    .photo .ph svg { width: 32px; height: 32px; }
+    .photo .ph svg { width: 28px; height: 28px; }
     .photo img {
       position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
       transition: transform .7s;
     }
-    .photo:hover img { transform: scale(1.1); }
-    .photo .badge { position: absolute; top: 8px; left: 8px; font-size: 10px; }
+    @media (hover: hover) { .photo:hover img { transform: scale(1.1); } }
+    .photo .badge { position: absolute; top: 6px; left: 6px; font-size: 10px; height: 18px; padding: 2px 7px; }
     .q-title {
-      font-size: 20px; line-height: 1; font-weight: 900; font-style: italic;
+      font-size: 18px; line-height: 1.1; font-weight: 900; font-style: italic;
       text-transform: uppercase; letter-spacing: -.025em; margin-bottom: 4px;
     }
-    .q-desc { color: var(--zinc-600); font-size: 12px; line-height: 1.375; font-weight: 500; }
+    .q-desc { color: var(--zinc-600); font-size: 13px; line-height: 1.45; font-weight: 500; }
     .hint {
-      background: var(--zinc-50); padding: 8px; border-radius: 14px; border: 1px solid var(--zinc-100);
+      background: var(--zinc-50); padding: 8px 10px; border-radius: 12px; border: 1px solid var(--zinc-100);
       display: flex; align-items: flex-start; gap: 8px;
     }
     .hint > svg { width: 16px; height: 16px; color: var(--zinc-400); margin-top: 2px; }
-    .hint .label { font-size: 9px; margin-bottom: 2px; }
-    .hint-text { font-size: 11px; color: var(--zinc-600); font-weight: 500; font-style: italic; }
-    .panel-actions { padding: 16px; background: var(--zinc-50); border-top: 1px solid var(--zinc-200); flex-shrink: 0; }
+    .hint .label { font-size: 10px; margin-bottom: 1px; }
+    .hint-text { font-size: 12px; line-height: 1.4; color: var(--zinc-600); font-weight: 500; font-style: italic; }
+    .panel-actions { padding: 10px 16px 12px; background: var(--zinc-50); border-top: 1px solid var(--zinc-200); flex-shrink: 0; }
 
     .map-wrap { flex: 1; min-height: 0; position: relative; background: var(--zinc-100); z-index: 0; }
     #map { position: absolute; inset: 0; z-index: 0; }
-    .leaflet-container { width: 100%; height: 100%; border-radius: 8px; font-family: var(--font-sans); background: var(--zinc-100); }
+    .leaflet-container { width: 100%; height: 100%; font-family: var(--font-sans); background: var(--zinc-100); }
+    .leaflet-bottom.leaflet-right { max-width: 100%; }
     .leaflet-control-attribution {
-      max-width: calc(100vw - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .leaflet-control-attribution:hover { white-space: normal; }
     #map.guessing { cursor: crosshair; }
     #map.guessing .leaflet-grab { cursor: crosshair; }
 
+    /* "Click/Tap the map" prompt: bottom on phones (clear of map controls), top on desktop */
     .map-hint {
-      position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
-      z-index: 10; pointer-events: none; max-width: calc(100% - 32px);
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      z-index: 10; pointer-events: none; max-width: calc(100% - 24px);
     }
     .map-hint-pill {
       background: rgba(0,0,0,.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      color: #fff; padding: 12px 24px; border-radius: 999px;
-      display: flex; align-items: center; gap: 12px; white-space: nowrap;
+      color: #fff; padding: 10px 18px; border-radius: 999px;
+      display: flex; align-items: center; gap: 10px; white-space: nowrap;
       box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
-      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
     }
     .map-hint-pill svg { width: 16px; height: 16px; color: var(--primary-fg); }
+    .t-tap { display: none; }
+    @media (hover: none) and (pointer: coarse) {
+      .t-click { display: none; }
+      .t-tap { display: inline; }
+    }
 
     .result {
-      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-      z-index: 10; width: calc(100% - 32px); max-width: 320px;
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 10; width: calc(100% - 24px); max-width: 320px;
     }
     .result-head {
-      background: var(--primary); color: var(--primary-fg); padding: 16px;
+      background: var(--primary); color: var(--primary-fg); padding: 10px 14px;
       display: flex; justify-content: space-between; align-items: center;
     }
     .result-head .label { font-size: 12px; color: inherit; opacity: .9; }
-    .result-body { padding: 24px; text-align: center; display: grid; gap: 8px; }
-    .result-dist { font-size: 30px; line-height: 36px; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
-    .result-body .label { font-size: 12px; line-height: 16px; }
-    .result-name { font-size: 14px; font-weight: 700; color: var(--zinc-800); padding-top: 8px; }
+    .result-body { padding: 12px 16px 16px; text-align: center; display: grid; gap: 4px; }
+    .result-dist { font-size: 26px; line-height: 32px; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
+    .result-body .label { font-size: 11px; line-height: 16px; }
+    .result-name { font-size: 14px; font-weight: 700; color: var(--zinc-800); padding-top: 4px; }
 
-    /* ---------- Breakpoints (sm 640 / md 768, as in the Tailwind original) ---------- */
+    /* ================= Tablet / desktop (Tailwind sm 640 / md 768) ================= */
     @media (min-width: 640px) {
       .stat-progress { display: block; }
     }
     @media (min-width: 768px) {
-      header { padding: 16px 24px; }
+      header { padding: max(16px, var(--safe-t)) max(24px, var(--safe-r)) 16px max(24px, var(--safe-l)); }
       .brand { gap: 12px; }
+      .brand-icon { padding: 8px; }
       .brand-icon svg { width: 24px; height: 24px; }
       .brand h1 { font-size: 20px; line-height: 28px; }
-      .brand p { font-size: 12px; line-height: 16px; }
+      .brand p { font-size: 12px; line-height: 16px; font-weight: 500; }
+      .h1-event { display: inline; }
+      .sub-event { display: none; }
       .stats { gap: 24px; }
 
+      footer { padding: 12px max(24px, var(--safe-r)) max(12px, var(--safe-b)) max(24px, var(--safe-l)); }
+
+      .overlay { padding: 24px; }
+      .start-card { padding: 24px 16px 16px; }
+      .start-head { gap: 16px; }
+      .target-bubble { padding: 16px; }
+      .target-bubble svg { width: 48px; height: 48px; }
+      .start-title { font-size: 30px; line-height: 36px; }
+      .start-desc { font-size: 16px; line-height: 24px; margin-top: 8px; }
+      .start-body { gap: 24px; }
+      .stat-grid { gap: 16px; }
+      .stat-box { padding: 16px; }
+      .stat-box .big { font-size: 24px; line-height: 32px; }
+      .stat-box .label { font-size: 12px; }
+      .btn-secondary { height: 56px; font-size: 18px; }
+      .btn svg { width: 24px; height: 24px; }
+      .over-head { padding: 32px; }
+      .over-head svg { width: 64px; height: 64px; margin-bottom: 16px; }
+      .over-head h2 { font-size: 36px; line-height: 40px; }
+      .over-head p { font-size: 16px; }
+      .over-body { padding: 32px; gap: 32px; }
+      .final-score { font-size: 72px; }
+
       .game { flex-direction: row; }
-      .panel { width: 400px; height: auto; border-bottom: 0; border-right: 1px solid var(--zinc-200); }
-      .panel-body { padding: 24px; }
-      .photo { max-height: none; }
-      .photo .badge { font-size: 12px; padding: 4px 12px; }
-      .q-title { font-size: 24px; margin-bottom: 8px; }
+      .panel {
+        width: clamp(320px, 34vw, 400px); max-height: none;
+        border-bottom: 0; border-right: 1px solid var(--zinc-200); padding-right: 0;
+      }
+      .panel-body { flex: 1 1 auto; padding: 24px; }
+      .panel-body > * + * { margin-top: 12px; }
+      .q-top { display: block; }
+      .q-top > * + * { margin-top: 12px; }
+      .photo { aspect-ratio: 16 / 9; border-radius: 14px; }
+      .photo .ph svg { width: 32px; height: 32px; }
+      .photo .badge { top: 8px; left: 8px; font-size: 12px; height: 22px; padding: 4px 12px; }
+      .q-title { font-size: 24px; line-height: 1; margin-bottom: 8px; }
       .q-desc { font-size: 14px; line-height: 1.625; }
-      .hint { padding: 16px; gap: 12px; }
+      .hint { padding: 16px; gap: 12px; border-radius: 14px; }
       .hint > svg { width: 20px; height: 20px; }
-      .hint .label { font-size: 10px; }
-      .hint-text { font-size: 12px; }
+      .hint .label { margin-bottom: 2px; }
       .panel-actions { padding: 24px; }
       .btn-primary { height: 56px; font-size: 18px; }
+
+      .leaflet-container { border-radius: 8px; }
+      .map-hint { top: 24px; bottom: auto; max-width: calc(100% - 32px); }
+      .map-hint-pill { padding: 12px 24px; gap: 12px; font-size: 14px; }
+      .result { bottom: 40px; width: calc(100% - 32px); }
+      .result-head { padding: 16px; }
+      .result-body { padding: 24px; gap: 8px; }
+      .result-dist { font-size: 30px; line-height: 36px; }
+      .result-body .label { font-size: 12px; }
+      .result-name { padding-top: 8px; }
+    }
+
+    /* ================= Phone landscape / short screens ================= */
+    @media (max-height: 520px) and (orientation: landscape) {
+      header { padding-top: max(6px, var(--safe-t)); padding-bottom: 6px; }
+      .brand-icon { padding: 6px; }
+      .brand-icon svg { width: 18px; height: 18px; }
+      .brand h1 { font-size: 15px; line-height: 20px; }
+      .brand p { display: none; }
+      .h1-event { display: inline; }
+      footer { display: none; }
+
+      .overlay { align-items: flex-start; padding: 12px; }
+      .start-card { padding: 16px; }
+      .target-bubble { display: none; }
+      .start-title { font-size: 24px; line-height: 30px; }
+      .start-desc { font-size: 14px; line-height: 20px; }
+      .start-body { gap: 12px; margin-top: 12px; }
+      .stat-box { padding: 8px 12px; }
+      .btn-secondary { height: 48px; font-size: 16px; }
+      .over-head { padding: 16px; }
+      .over-head svg { display: none; }
+      .over-head h2 { font-size: 26px; line-height: 1.1; }
+      .over-body { padding: 16px; gap: 12px; }
+      .final-score { font-size: 48px; }
+
+      .game { flex-direction: row; }
+      .panel {
+        width: min(320px, 42vw); max-height: none;
+        border-bottom: 0; border-right: 1px solid var(--zinc-200); padding-right: 0;
+      }
+      .panel-body { flex: 1 1 auto; padding: 10px 12px; }
+      .panel-body > * + * { margin-top: 8px; }
+      .q-top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+      .q-top > * + * { margin-top: 0; }
+      .photo { aspect-ratio: 4 / 3; border-radius: 10px; }
+      .photo .badge { top: 5px; left: 5px; font-size: 10px; height: 18px; padding: 2px 7px; }
+      .q-title { font-size: 16px; line-height: 1.1; margin-bottom: 3px; }
+      .q-desc { font-size: 12px; line-height: 1.4; }
+      .hint { padding: 6px 8px; gap: 6px; border-radius: 10px; }
+      .hint > svg { width: 14px; height: 14px; }
+      .hint-text { font-size: 11px; }
+      .panel-actions { padding: 8px 12px max(8px, var(--safe-b)); }
+      .btn-primary { height: 44px; font-size: 14px; }
+
+      .map-hint { top: auto; bottom: 16px; }
+      .map-hint-pill { padding: 8px 16px; font-size: 12px; gap: 8px; }
+      .result { bottom: 12px; max-width: 280px; }
+      .result-head { padding: 8px 12px; }
+      .result-body { padding: 8px 12px 12px; gap: 2px; }
+      .result-dist { font-size: 24px; line-height: 28px; }
+      .result-name { padding-top: 2px; font-size: 13px; }
     }
 
     /* ---------- Motion ---------- */
@@ -315,8 +443,8 @@
       <div class="brand">
         <div class="brand-icon"><svg class="icon"><use href="#i-navigation"/></svg></div>
         <div class="brand-text">
-          <h1>Aurora Sports Geo-Guesser Spring Fever 2026</h1>
-          <p>Geo-Challenge</p>
+          <h1>Aurora Sports Geo-Guesser<span class="h1-event"> GIS Day 2026</span></h1>
+          <p><span class="sub-event">GIS Day 2026 · </span>Geo-Challenge</p>
         </div>
       </div>
       <div class="stats" id="stats" hidden>
@@ -325,7 +453,7 @@
           <p class="stat-value" id="progress">1 / 5</p>
         </div>
         <div class="stat">
-          <p class="label">Total Score</p>
+          <p class="label"><span class="lbl-total">Total </span>Score</p>
           <p class="stat-value accent" id="score">0</p>
         </div>
       </div>
@@ -358,14 +486,16 @@
       <section class="game" id="screen-game" hidden>
         <aside class="panel">
           <div class="panel-body">
-            <div class="photo">
-              <div class="ph"><svg class="icon"><use href="#i-map-pin"/></svg></div>
-              <img id="q-img" alt="Location" referrerpolicy="no-referrer" />
-              <span class="badge badge-primary" id="q-badge">Question 1</span>
-            </div>
-            <div>
-              <h2 class="q-title">Where is this?</h2>
-              <p class="q-desc" id="q-desc"></p>
+            <div class="q-top">
+              <div class="photo">
+                <div class="ph"><svg class="icon"><use href="#i-map-pin"/></svg></div>
+                <img id="q-img" alt="Location" referrerpolicy="no-referrer" />
+                <span class="badge badge-primary" id="q-badge">Question 1</span>
+              </div>
+              <div>
+                <h2 class="q-title">Where is this?</h2>
+                <p class="q-desc" id="q-desc"></p>
+              </div>
             </div>
             <div class="hint">
               <svg class="icon"><use href="#i-info"/></svg>
@@ -389,7 +519,7 @@
           <div class="map-hint" id="map-hint">
             <div class="map-hint-pill">
               <svg class="icon"><use href="#i-map-pin"/></svg>
-              <span>Click the map to guess</span>
+              <span><span class="t-click">Click</span><span class="t-tap">Tap</span> the map to guess</span>
             </div>
           </div>
 
@@ -434,7 +564,7 @@
     </main>
 
     <footer>
-      <p class="label">Spring Fever Aurora, Ontario 2026</p>
+      <p class="label">GIS Day Aurora, Ontario 2026</p>
       <div class="live"><span class="dot"></span><span class="label">Live Challenge</span></div>
     </footer>
   </div>
@@ -447,8 +577,8 @@
     var QUESTIONS = [
       {
         id: 1,
-        name: "Stronach Aurora Recreation Complex (SARC)",
-        description: "A premier multi-use facility featuring two NHL-sized ice rinks, a 25-metre pool, and several sports fields. It's the heart of Aurora's indoor recreation.",
+        name: "Aurora Recreation Complex (ARC)",
+        description: "A multi-use facility with two ice rinks, three pools at the Canadian Tire Aquatic Centre, and a gymnasium. It's the heart of Aurora's indoor recreation.",
         imageUrl: "https://images.unsplash.com/photo-1515523110800-9415d13b84a8?auto=format&fit=crop&w=800&q=80",
         location: { lat: 44.011111, lng: -79.422833 },
         hint: "Located in the northeastern part of town, near Wellington St E and the 404."
@@ -475,7 +605,7 @@
         description: "A major outdoor sports hub featuring multiple soccer pitches and baseball diamonds, often hosting local league tournaments.",
         imageUrl: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=800&q=80",
         location: { lat: 44.0116407, lng: -79.4236894 },
-        hint: "Found on the east side of town, very close to the SARC complex."
+        hint: "Found on the east side of town, very close to the Aurora Recreation Complex."
       },
       {
         id: 5,
@@ -507,6 +637,8 @@
       }
     ];
     var LEAFLET_IMG = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/images/';
+
+    var REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     /* ================= Scoring ================= */
     function deg2rad(deg) { return deg * (Math.PI / 180); }
@@ -545,6 +677,7 @@
       stats: $('stats'), progress: $('progress'), score: $('score'),
       start: $('screen-start'), game: $('screen-game'), over: $('screen-over'),
       img: $('q-img'), badge: $('q-badge'), desc: $('q-desc'), hint: $('q-hint'),
+      panelBody: document.querySelector('.panel-body'),
       submit: $('btn-submit'), next: $('btn-next'),
       mapEl: $('map'), mapHint: $('map-hint'),
       result: $('result'), resultPts: $('result-pts'), resultDist: $('result-dist'), resultName: $('result-name'),
@@ -592,7 +725,7 @@
         layers[b.name] = L.tileLayer(b.url, { attribution: b.attribution, maxZoom: 19 });
         if (i === 0) layers[b.name].addTo(map);
       });
-      if (BASEMAPS.length > 1) L.control.layers(layers, null, { position: 'topleft' }).addTo(map);
+      if (BASEMAPS.length > 1) L.control.layers(layers, null, { position: 'topright' }).addTo(map);
 
       map.on('click', function (e) {
         if (state.showResult || state.isGameOver || state.index < 0) return;
@@ -601,11 +734,21 @@
         else guessMarker = L.marker(e.latlng).addTo(map);
         render();
       });
+
+      // Keep Leaflet in sync when the question panel changes height (phones) or the screen rotates
+      if ('ResizeObserver' in window) {
+        new ResizeObserver(function () { map.invalidateSize({ pan: false }); }).observe(el.mapEl);
+      }
     }
 
     function clearMapLayers() {
       if (guessMarker) { guessMarker.remove(); guessMarker = null; }
       if (resultLayer) { resultLayer.remove(); resultLayer = null; }
+    }
+
+    function showAurora(animate) {
+      map.invalidateSize({ pan: false });
+      map.fitBounds(AURORA_BOUNDS, { animate: !!animate && !REDUCE_MOTION });
     }
 
     function drawResult(guess, actual) {
@@ -618,6 +761,22 @@
           color: '#ef4444', dashArray: '5, 10'
         })
       ]).addTo(map);
+    }
+
+    // Zoom so both the guess and the answer are visible above the result card
+    function frameResult(guess, actual) {
+      map.invalidateSize({ pan: false });
+      var target = L.latLng(actual.lat, actual.lng);
+      var bounds = target.toBounds(PERFECT_RADIUS_M * 2).extend([guess.lat, guess.lng]);
+      var size = map.getSize();
+      var cardH = el.result.offsetHeight || 0;
+      var bottomPad = Math.min(cardH + 40, Math.round(size.y * 0.6));
+      map.fitBounds(bounds, {
+        paddingTopLeft: [40, 40],
+        paddingBottomRight: [40, bottomPad],
+        maxZoom: 16,
+        animate: !REDUCE_MOTION
+      });
     }
 
     /* ================= Actions ================= */
@@ -633,26 +792,27 @@
       el.game.hidden = false;
       initMap();
       clearMapLayers();
-      map.invalidateSize();
-      map.fitBounds(AURORA_BOUNDS, { animate: false });
       render();
+      showAurora(false);
     }
 
     function submitGuess() {
       if (!state.currentGuess || state.showResult) return;
       var q = QUESTIONS[state.index];
-      var distance = calculateDistance(state.currentGuess, q.location);
+      var guess = state.currentGuess;
+      var distance = calculateDistance(guess, q.location);
       var pts = calculateScore(distance);
 
-      state.guesses[state.index] = state.currentGuess;
+      state.guesses[state.index] = guess;
       state.score += pts;
       state.showResult = true;
 
       el.resultPts.textContent = '+' + pts.toLocaleString() + ' pts';
       el.resultDist.textContent = formatDistance(distance);
       el.resultName.textContent = q.name;
-      drawResult(state.currentGuess, q.location);
+      drawResult(guess, q.location);
       render();
+      frameResult(guess, q.location);
     }
 
     function nextQuestion() {
@@ -670,6 +830,8 @@
       state.currentGuess = null;
       clearMapLayers();
       render();
+      el.panelBody.scrollTop = 0;
+      showAurora(true);
     }
 
     /* ================= Render ================= */
@@ -705,14 +867,13 @@
 
     /* ================= Wire up ================= */
     $('btn-start').addEventListener('click', function () {
-      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       el.start.classList.add('leaving');
       setTimeout(function () {
         el.start.hidden = true;
         el.start.classList.remove('leaving');
         renderedIndex = null;
         startGame();
-      }, reduce ? 0 : 200);
+      }, REDUCE_MOTION ? 0 : 200);
     });
     el.submit.addEventListener('click', submitGuess);
     el.next.addEventListener('click', nextQuestion);
