@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Aurora Geo Geusser</title>
+  <meta name="description" content="A GeoGuesser-style game featuring sports landmarks across Aurora, Ontario." />
+  <meta name="theme-color" content="#006838" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23006838'/%3E%3Cpolygon points='7 15 25 7 17 25 15 17 7 15' fill='none' stroke='%23FFD200' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* ---------- Brand colours: edit these two to re-theme ---------- */
+    :root {
+      --primary: #006838;            /* Aurora Green */
+      --primary-fg: #FFD200;         /* Aurora Gold  */
+      --secondary: #FFD200;
+      --secondary-fg: #006838;
+
+      --zinc-50: #fafafa; --zinc-100: #f4f4f5; --zinc-200: #e4e4e7;
+      --zinc-400: #a1a1aa; --zinc-500: #71717a; --zinc-600: #52525b;
+      --zinc-800: #27272a; --zinc-900: #18181b;
+      --radius: 10px;
+      --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      color-scheme: light;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--font-sans);
+      color: var(--zinc-900);
+      background: var(--zinc-50);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, p { margin: 0; }
+    svg.icon { display: block; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--zinc-400);
+    }
+
+    /* ---------- App shell ---------- */
+    .app {
+      height: 100vh; height: 100dvh;
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--zinc-50);
+    }
+
+    header {
+      background: #fff; border-bottom: 1px solid var(--zinc-200);
+      padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; flex-shrink: 0; position: relative; z-index: 10;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+    .brand-icon { background: var(--primary); padding: 8px; border-radius: 8px; color: #fff; flex-shrink: 0; }
+    .brand-icon svg { width: 20px; height: 20px; }
+    .brand-text { min-width: 0; }
+    .brand h1 {
+      font-size: 16px; line-height: 24px; font-weight: 700; letter-spacing: -.025em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .brand p {
+      font-size: 10px; line-height: 15px; color: var(--zinc-500); font-weight: 500;
+      text-transform: uppercase; letter-spacing: .05em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stats { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .stat { text-align: right; }
+    .stat-value { font-family: var(--font-mono); font-size: 14px; line-height: 20px; font-weight: 700; }
+    .stat-value.accent { color: var(--primary); }
+    .stat-progress { display: none; }
+
+    main { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
+
+    footer {
+      background: #fff; border-top: 1px solid var(--zinc-200);
+      padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 4px 16px; flex-shrink: 0; position: relative; z-index: 10;
+    }
+    footer .label { color: var(--zinc-400); }
+    .live { display: flex; align-items: center; gap: 6px; }
+    .live .label { color: var(--zinc-500); }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: #22c55e; }
+
+    /* ---------- Cards & buttons ---------- */
+    .card {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(24,24,27,.06), 0 25px 50px -12px rgba(0,0,0,.25);
+    }
+    .btn {
+      appearance: none; border: 1px solid transparent; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; border-radius: var(--radius);
+      font-family: inherit; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+      transition: background-color .15s, color .15s, opacity .15s, box-shadow .15s, transform .05s;
+      user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active:not(:disabled) { transform: translateY(1px); }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 45%, transparent); }
+    .btn:disabled { opacity: .5; pointer-events: none; }
+    .btn svg { width: 24px; height: 24px; transition: transform .15s; }
+    .btn:hover svg.nudge { transform: translateX(4px); }
+
+    .btn-primary {
+      background: var(--primary); color: var(--primary-fg);
+      height: 48px; font-size: 16px;
+      box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--primary) 20%, transparent), 0 4px 6px -4px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+    .btn-primary:hover { opacity: .9; }
+    .btn-secondary {
+      background: var(--secondary); color: var(--secondary-fg);
+      height: 56px; font-size: 18px;
+      box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--secondary) 20%, transparent), 0 4px 6px -4px color-mix(in srgb, var(--secondary) 20%, transparent);
+    }
+    .btn-secondary:hover { background: color-mix(in srgb, var(--secondary) 90%, transparent); }
+    .btn-outline {
+      background: #fff; color: var(--primary); border: 2px solid var(--primary);
+      height: 48px; font-size: 14px;
+    }
+    .btn-outline svg { width: 16px; height: 16px; }
+    .btn-outline:hover { background: var(--primary); color: var(--primary-fg); }
+
+    .badge {
+      display: inline-flex; align-items: center; height: 20px; padding: 2px 8px;
+      border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .badge-primary { background: var(--primary); color: var(--primary-fg); }
+    .badge-secondary { background: var(--secondary); color: var(--secondary-fg); }
+
+    /* ---------- Overlays (start + game over) ---------- */
+    .overlay {
+      position: absolute; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      overflow-y: auto;
+    }
+    .overlay-start { background: rgba(24,24,27,.05); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .overlay-over  { background: rgba(24,24,27,.10); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 30; }
+
+    .start-card { max-width: 448px; width: 100%; padding: 24px 16px 16px; margin: auto; }
+    .start-head { text-align: center; display: grid; gap: 16px; }
+    .target-bubble {
+      margin: 0 auto; width: fit-content; padding: 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);
+    }
+    .target-bubble svg { width: 48px; height: 48px; }
+    .start-title {
+      font-size: 30px; line-height: 36px; font-weight: 900; font-style: italic;
+      text-transform: uppercase; letter-spacing: -.05em;
+    }
+    .start-desc { color: var(--zinc-600); font-size: 16px; line-height: 24px; margin-top: 8px; }
+    .start-body { display: grid; gap: 24px; margin-top: 16px; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .stat-box { background: var(--zinc-50); padding: 16px; border-radius: 14px; border: 1px solid var(--zinc-100); }
+    .stat-box .big { font-size: 24px; line-height: 32px; font-weight: 900; color: var(--primary); }
+    .stat-box .label { font-size: 12px; line-height: 16px; }
+
+    .over-card { max-width: 512px; width: 100%; margin: auto; }
+    .over-head { background: var(--primary); color: var(--primary-fg); padding: 32px; text-align: center; }
+    .over-head svg { width: 64px; height: 64px; margin: 0 auto 16px; }
+    .over-head h2 {
+      font-size: 36px; line-height: 40px; font-weight: 900; font-style: italic;
+      text-transform: uppercase; letter-spacing: -.05em; margin-bottom: 8px;
+    }
+    .over-head p { font-weight: 500; opacity: .9; }
+    .over-body { padding: 32px; display: grid; gap: 32px; }
+    .final { text-align: center; }
+    .final .label { font-size: 12px; line-height: 16px; margin-bottom: 4px; }
+    .final-score { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
+    .over-msg { text-align: center; font-size: 14px; color: var(--zinc-500); font-weight: 500; font-style: italic; margin-bottom: 16px; }
+
+    /* ---------- Game layout ---------- */
+    .game { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+    .panel {
+      width: 100%; height: 45vh; height: 45dvh; flex-shrink: 0;
+      background: #fff; border-bottom: 1px solid var(--zinc-200);
+      display: flex; flex-direction: column; position: relative; z-index: 10;
+    }
+    .panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
+    .panel-body > * + * { margin-top: 12px; }
+    .photo {
+      position: relative; aspect-ratio: 16 / 9; max-height: 25vh; width: 100%;
+      border-radius: 14px; overflow: hidden;
+      background: var(--zinc-100); border: 1px solid var(--zinc-200);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,.05);
+    }
+    .photo .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--zinc-400); }
+    .photo .ph svg { width: 32px; height: 32px; }
+    .photo img {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      transition: transform .7s;
+    }
+    .photo:hover img { transform: scale(1.1); }
+    .photo .badge { position: absolute; top: 8px; left: 8px; font-size: 10px; }
+    .q-title {
+      font-size: 20px; line-height: 1; font-weight: 900; font-style: italic;
+      text-transform: uppercase; letter-spacing: -.025em; margin-bottom: 4px;
+    }
+    .q-desc { color: var(--zinc-600); font-size: 12px; line-height: 1.375; font-weight: 500; }
+    .hint {
+      background: var(--zinc-50); padding: 8px; border-radius: 14px; border: 1px solid var(--zinc-100);
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .hint > svg { width: 16px; height: 16px; color: var(--zinc-400); margin-top: 2px; }
+    .hint .label { font-size: 9px; margin-bottom: 2px; }
+    .hint-text { font-size: 11px; color: var(--zinc-600); font-weight: 500; font-style: italic; }
+    .panel-actions { padding: 16px; background: var(--zinc-50); border-top: 1px solid var(--zinc-200); flex-shrink: 0; }
+
+    .map-wrap { flex: 1; min-height: 0; position: relative; background: var(--zinc-100); z-index: 0; }
+    #map { position: absolute; inset: 0; z-index: 0; }
+    .leaflet-container { width: 100%; height: 100%; border-radius: 8px; font-family: var(--font-sans); background: var(--zinc-100); }
+    .leaflet-control-attribution {
+      max-width: calc(100vw - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .leaflet-control-attribution:hover { white-space: normal; }
+    #map.guessing { cursor: crosshair; }
+    #map.guessing .leaflet-grab { cursor: crosshair; }
+
+    .map-hint {
+      position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 10; pointer-events: none; max-width: calc(100% - 32px);
+    }
+    .map-hint-pill {
+      background: rgba(0,0,0,.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      color: #fff; padding: 12px 24px; border-radius: 999px;
+      display: flex; align-items: center; gap: 12px; white-space: nowrap;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    }
+    .map-hint-pill svg { width: 16px; height: 16px; color: var(--primary-fg); }
+
+    .result {
+      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+      z-index: 10; width: calc(100% - 32px); max-width: 320px;
+    }
+    .result-head {
+      background: var(--primary); color: var(--primary-fg); padding: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .result-head .label { font-size: 12px; color: inherit; opacity: .9; }
+    .result-body { padding: 24px; text-align: center; display: grid; gap: 8px; }
+    .result-dist { font-size: 30px; line-height: 36px; font-weight: 900; letter-spacing: -.05em; color: var(--primary); }
+    .result-body .label { font-size: 12px; line-height: 16px; }
+    .result-name { font-size: 14px; font-weight: 700; color: var(--zinc-800); padding-top: 8px; }
+
+    /* ---------- Breakpoints (sm 640 / md 768, as in the Tailwind original) ---------- */
+    @media (min-width: 640px) {
+      .stat-progress { display: block; }
+    }
+    @media (min-width: 768px) {
+      header { padding: 16px 24px; }
+      .brand { gap: 12px; }
+      .brand-icon svg { width: 24px; height: 24px; }
+      .brand h1 { font-size: 20px; line-height: 28px; }
+      .brand p { font-size: 12px; line-height: 16px; }
+      .stats { gap: 24px; }
+
+      .game { flex-direction: row; }
+      .panel { width: 400px; height: auto; border-bottom: 0; border-right: 1px solid var(--zinc-200); }
+      .panel-body { padding: 24px; }
+      .photo { max-height: none; }
+      .photo .badge { font-size: 12px; padding: 4px 12px; }
+      .q-title { font-size: 24px; margin-bottom: 8px; }
+      .q-desc { font-size: 14px; line-height: 1.625; }
+      .hint { padding: 16px; gap: 12px; }
+      .hint > svg { width: 20px; height: 20px; }
+      .hint .label { font-size: 10px; }
+      .hint-text { font-size: 12px; }
+      .panel-actions { padding: 24px; }
+      .btn-primary { height: 56px; font-size: 18px; }
+    }
+
+    /* ---------- Motion ---------- */
+    @keyframes riseIn   { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+    @keyframes riseOut  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-20px); } }
+    @keyframes popIn    { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: none; } }
+    @keyframes dropIn   { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+    @keyframes cardIn   { from { opacity: 0; transform: scale(.9) translateY(20px); } to { opacity: 1; transform: none; } }
+    .overlay-start { animation: riseIn .3s ease-out both; }
+    .overlay-start.leaving { animation: riseOut .2s ease-in both; }
+    .overlay-over { animation: popIn .3s ease-out both; }
+    .map-hint-pill { animation: dropIn .3s ease-out both; }
+    .result .card { animation: cardIn .3s ease-out both; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Inline icon sprite (Lucide, ISC licence) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-navigation" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978"/><path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978"/><path d="M18 9h1.5a1 1 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6 9H4.5a1 1 0 0 1 0-5H6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="brand-icon"><svg class="icon"><use href="#i-navigation"/></svg></div>
+        <div class="brand-text">
+          <h1>Aurora Sports Geo-Guesser Spring Fever 2026</h1>
+          <p>Geo-Challenge</p>
+        </div>
+      </div>
+      <div class="stats" id="stats" hidden>
+        <div class="stat stat-progress">
+          <p class="label">Progress</p>
+          <p class="stat-value" id="progress">1 / 5</p>
+        </div>
+        <div class="stat">
+          <p class="label">Total Score</p>
+          <p class="stat-value accent" id="score">0</p>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Start screen -->
+      <section class="overlay overlay-start" id="screen-start">
+        <div class="card start-card">
+          <div class="start-head">
+            <div class="target-bubble"><svg class="icon"><use href="#i-target"/></svg></div>
+            <div>
+              <h2 class="start-title">Ready to Play?</h2>
+              <p class="start-desc">Test your knowledge of Aurora's sports landmarks. Read the descriptions and find it on the map!</p>
+            </div>
+          </div>
+          <div class="start-body">
+            <div class="stat-grid">
+              <div class="stat-box"><p class="big" id="count-locations">5</p><p class="label">Locations</p></div>
+              <div class="stat-box"><p class="big" id="count-max">5000</p><p class="label">Max Score</p></div>
+            </div>
+            <button class="btn btn-secondary" id="btn-start" type="button">
+              Start Challenge <svg class="icon nudge"><use href="#i-chevron-right"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game screen -->
+      <section class="game" id="screen-game" hidden>
+        <aside class="panel">
+          <div class="panel-body">
+            <div class="photo">
+              <div class="ph"><svg class="icon"><use href="#i-map-pin"/></svg></div>
+              <img id="q-img" alt="Location" referrerpolicy="no-referrer" />
+              <span class="badge badge-primary" id="q-badge">Question 1</span>
+            </div>
+            <div>
+              <h2 class="q-title">Where is this?</h2>
+              <p class="q-desc" id="q-desc"></p>
+            </div>
+            <div class="hint">
+              <svg class="icon"><use href="#i-info"/></svg>
+              <div>
+                <p class="label">Hint</p>
+                <p class="hint-text" id="q-hint"></p>
+              </div>
+            </div>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-primary" id="btn-submit" type="button" disabled>Select on Map</button>
+            <button class="btn btn-primary" id="btn-next" type="button" hidden>
+              Next Question <svg class="icon nudge"><use href="#i-chevron-right"/></svg>
+            </button>
+          </div>
+        </aside>
+
+        <div class="map-wrap">
+          <div id="map"></div>
+
+          <div class="map-hint" id="map-hint">
+            <div class="map-hint-pill">
+              <svg class="icon"><use href="#i-map-pin"/></svg>
+              <span>Click the map to guess</span>
+            </div>
+          </div>
+
+          <div class="result" id="result" hidden aria-live="polite">
+            <div class="card">
+              <div class="result-head">
+                <span class="label">Result</span>
+                <span class="badge badge-secondary" id="result-pts">+0 pts</span>
+              </div>
+              <div class="result-body">
+                <p class="result-dist" id="result-dist">0m</p>
+                <p class="label">Distance from target</p>
+                <p class="result-name" id="result-name"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game over screen -->
+      <section class="overlay overlay-over" id="screen-over" hidden>
+        <div class="card over-card">
+          <div class="over-head">
+            <svg class="icon"><use href="#i-trophy"/></svg>
+            <h2>Challenge Complete!</h2>
+            <p>You've explored the best of Aurora Sports.</p>
+          </div>
+          <div class="over-body">
+            <div class="final">
+              <p class="label">Final Score</p>
+              <p class="final-score" id="final-score">0</p>
+            </div>
+            <div>
+              <p class="over-msg" id="final-msg"></p>
+              <button class="btn btn-outline" id="btn-again" type="button">
+                <svg class="icon"><use href="#i-refresh"/></svg> Play Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p class="label">Spring Fever Aurora, Ontario 2026</p>
+      <div class="live"><span class="dot"></span><span class="label">Live Challenge</span></div>
+    </footer>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ================= Game content: edit questions here ================= */
+    var QUESTIONS = [
+      {
+        id: 1,
+        name: "Stronach Aurora Recreation Complex (SARC)",
+        description: "A premier multi-use facility featuring two NHL-sized ice rinks, a 25-metre pool, and several sports fields. It's the heart of Aurora's indoor recreation.",
+        imageUrl: "https://images.unsplash.com/photo-1515523110800-9415d13b84a8?auto=format&fit=crop&w=800&q=80",
+        location: { lat: 44.011111, lng: -79.422833 },
+        hint: "Located in the northeastern part of town, near Wellington St E and the 404."
+      },
+      {
+        id: 2,
+        name: "St. Andrew's College (SAC) Athletic Fields",
+        description: "One of Canada's most prestigious boys' schools, known for its incredible athletic facilities including football fields, squash courts, and a world-class track.",
+        imageUrl: "https://images.unsplash.com/photo-1566577739112-5180d4bf9390?auto=format&fit=crop&w=800&q=80",
+        location: { lat: 44.0109712, lng: -79.477275 },
+        hint: "Situated on a large campus in the western part of Aurora, along Yonge Street."
+      },
+      {
+        id: 3,
+        name: "Aurora Community Centre",
+        description: "A historic venue for local hockey, figure skating, and community events. It has been a staple of Aurora sports for decades.",
+        imageUrl: "https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?auto=format&fit=crop&w=800&q=80",
+        location: { lat: 44.003962, lng: -79.4719722 },
+        hint: "Located right in the town center, just off Aurora Heights Blvd."
+      },
+      {
+        id: 4,
+        name: "Stewart Burnett Park",
+        description: "A major outdoor sports hub featuring multiple soccer pitches and baseball diamonds, often hosting local league tournaments.",
+        imageUrl: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=800&q=80",
+        location: { lat: 44.0116407, lng: -79.4236894 },
+        hint: "Found on the east side of town, very close to the SARC complex."
+      },
+      {
+        id: 5,
+        name: "Sheppard's Bush Conservation Area",
+        description: "While a conservation area, it's famous for its soccer fields and extensive trail network used by local cross-country runners.",
+        imageUrl: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=80",
+        location: { lat: 43.9974086, lng: -79.4543082 },
+        hint: "Located in the southern part of town, with entrances off Industrial Pkwy S."
+      }
+    ];
+
+    // Starting view: the map zooms to fit the Town of Aurora on any screen size
+    var AURORA_BOUNDS = [[43.965, -79.505], [44.030, -79.400]];
+    var PERFECT_RADIUS_M = 150;   // guesses inside this buffer score 1000
+    var MAX_SCORE = 1000;
+
+    /* ================= Basemaps (public Esri tile services, no API key) ================= */
+    // The first entry is shown by default; the rest appear in the layer switcher.
+    var BASEMAPS = [
+      {
+        name: 'Streets',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Powered by <a href="https://www.esri.com">Esri</a> | Sources: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, OpenStreetMap contributors, and the GIS User Community'
+      },
+      {
+        name: 'Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Powered by <a href="https://www.esri.com">Esri</a> | Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community'
+      }
+    ];
+    var LEAFLET_IMG = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/images/';
+
+    /* ================= Scoring ================= */
+    function deg2rad(deg) { return deg * (Math.PI / 180); }
+
+    // Haversine distance in km
+    function calculateDistance(a, b) {
+      var R = 6371;
+      var dLat = deg2rad(b.lat - a.lat);
+      var dLng = deg2rad(b.lng - a.lng);
+      var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(deg2rad(a.lat)) * Math.cos(deg2rad(b.lat)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    // <= 150 m = 1000 pts, then exponential decay (~0 by 10 km)
+    function calculateScore(distanceKm) {
+      var buffer = PERFECT_RADIUS_M / 1000;
+      if (distanceKm <= buffer) return MAX_SCORE;
+      return Math.max(0, Math.round(MAX_SCORE * Math.exp(-(distanceKm - buffer) / 2)));
+    }
+
+    function formatDistance(km) {
+      return km < 1 ? (km * 1000).toFixed(0) + 'm' : km.toFixed(2) + 'km';
+    }
+
+    function finalMessage(score) {
+      if (score > 4000) return "Incredible! You're a true Aurora GIS expert.";
+      if (score > 2500) return 'Great job! You know your way around the town.';
+      return "Not bad! There's always more to discover in Aurora.";
+    }
+
+    /* ================= DOM ================= */
+    function $(id) { return document.getElementById(id); }
+    var el = {
+      stats: $('stats'), progress: $('progress'), score: $('score'),
+      start: $('screen-start'), game: $('screen-game'), over: $('screen-over'),
+      img: $('q-img'), badge: $('q-badge'), desc: $('q-desc'), hint: $('q-hint'),
+      submit: $('btn-submit'), next: $('btn-next'),
+      mapEl: $('map'), mapHint: $('map-hint'),
+      result: $('result'), resultPts: $('result-pts'), resultDist: $('result-dist'), resultName: $('result-name'),
+      finalScore: $('final-score'), finalMsg: $('final-msg')
+    };
+
+    $('count-locations').textContent = QUESTIONS.length;
+    $('count-max').textContent = QUESTIONS.length * MAX_SCORE;
+
+    el.img.addEventListener('error', function () { el.img.style.visibility = 'hidden'; });
+    el.img.addEventListener('load', function () { el.img.style.visibility = 'visible'; });
+
+    /* ================= State ================= */
+    var state = {
+      index: -1,          // -1 = start screen
+      score: 0,
+      guesses: [],
+      showResult: false,
+      isGameOver: false,
+      currentGuess: null
+    };
+
+    /* ================= Map ================= */
+    var map = null, guessMarker = null, resultLayer = null;
+
+    function initMap() {
+      if (map) return;
+
+      L.Marker.prototype.options.icon = L.icon({
+        iconUrl: LEAFLET_IMG + 'marker-icon.png',
+        iconRetinaUrl: LEAFLET_IMG + 'marker-icon-2x.png',
+        shadowUrl: LEAFLET_IMG + 'marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+      });
+
+      map = L.map(el.mapEl, {
+        minZoom: 10,
+        maxZoom: 19,
+        scrollWheelZoom: true
+      });
+
+      var layers = {};
+      BASEMAPS.forEach(function (b, i) {
+        layers[b.name] = L.tileLayer(b.url, { attribution: b.attribution, maxZoom: 19 });
+        if (i === 0) layers[b.name].addTo(map);
+      });
+      if (BASEMAPS.length > 1) L.control.layers(layers, null, { position: 'topleft' }).addTo(map);
+
+      map.on('click', function (e) {
+        if (state.showResult || state.isGameOver || state.index < 0) return;
+        state.currentGuess = { lat: e.latlng.lat, lng: e.latlng.lng };
+        if (guessMarker) guessMarker.setLatLng(e.latlng);
+        else guessMarker = L.marker(e.latlng).addTo(map);
+        render();
+      });
+    }
+
+    function clearMapLayers() {
+      if (guessMarker) { guessMarker.remove(); guessMarker = null; }
+      if (resultLayer) { resultLayer.remove(); resultLayer = null; }
+    }
+
+    function drawResult(guess, actual) {
+      resultLayer = L.layerGroup([
+        L.circle([actual.lat, actual.lng], {
+          radius: PERFECT_RADIUS_M,
+          color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.4, weight: 2
+        }),
+        L.polyline([[guess.lat, guess.lng], [actual.lat, actual.lng]], {
+          color: '#ef4444', dashArray: '5, 10'
+        })
+      ]).addTo(map);
+    }
+
+    /* ================= Actions ================= */
+    function startGame() {
+      state.index = 0;
+      state.score = 0;
+      state.guesses = QUESTIONS.map(function () { return null; });
+      state.showResult = false;
+      state.isGameOver = false;
+      state.currentGuess = null;
+
+      el.over.hidden = true;
+      el.game.hidden = false;
+      initMap();
+      clearMapLayers();
+      map.invalidateSize();
+      map.fitBounds(AURORA_BOUNDS, { animate: false });
+      render();
+    }
+
+    function submitGuess() {
+      if (!state.currentGuess || state.showResult) return;
+      var q = QUESTIONS[state.index];
+      var distance = calculateDistance(state.currentGuess, q.location);
+      var pts = calculateScore(distance);
+
+      state.guesses[state.index] = state.currentGuess;
+      state.score += pts;
+      state.showResult = true;
+
+      el.resultPts.textContent = '+' + pts.toLocaleString() + ' pts';
+      el.resultDist.textContent = formatDistance(distance);
+      el.resultName.textContent = q.name;
+      drawResult(state.currentGuess, q.location);
+      render();
+    }
+
+    function nextQuestion() {
+      if (state.index === QUESTIONS.length - 1) {
+        state.isGameOver = true;
+        el.finalScore.textContent = state.score.toLocaleString();
+        el.finalMsg.textContent = finalMessage(state.score);
+        el.game.hidden = true;
+        el.over.hidden = false;
+        render();
+        return;
+      }
+      state.index += 1;
+      state.showResult = false;
+      state.currentGuess = null;
+      clearMapLayers();
+      render();
+    }
+
+    /* ================= Render ================= */
+    var renderedIndex = null;
+
+    function render() {
+      var inGame = state.index >= 0 && !state.isGameOver;
+      el.stats.hidden = !inGame;
+      if (!inGame) return;
+
+      var q = QUESTIONS[state.index];
+      el.progress.textContent = (state.index + 1) + ' / ' + QUESTIONS.length;
+      el.score.textContent = state.score.toLocaleString();
+
+      if (renderedIndex !== state.index) {
+        renderedIndex = state.index;
+        el.img.style.visibility = 'hidden';
+        el.img.src = q.imageUrl;
+        el.badge.textContent = 'Question ' + (state.index + 1);
+        el.desc.textContent = q.description;
+        el.hint.textContent = q.hint;
+      }
+
+      el.submit.hidden = state.showResult;
+      el.next.hidden = !state.showResult;
+      el.submit.disabled = !state.currentGuess;
+      el.submit.textContent = state.currentGuess ? 'Submit Guess' : 'Select on Map';
+
+      el.mapHint.hidden = !!(state.currentGuess || state.showResult);
+      el.result.hidden = !state.showResult;
+      el.mapEl.classList.toggle('guessing', !state.showResult);
+    }
+
+    /* ================= Wire up ================= */
+    $('btn-start').addEventListener('click', function () {
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.start.classList.add('leaving');
+      setTimeout(function () {
+        el.start.hidden = true;
+        el.start.classList.remove('leaving');
+        renderedIndex = null;
+        startGame();
+      }, reduce ? 0 : 200);
+    });
+    el.submit.addEventListener('click', submitGuess);
+    el.next.addEventListener('click', nextQuestion);
+    $('btn-again').addEventListener('click', function () { renderedIndex = null; startGame(); });
+  })();
+  </script>
+</body>
+</html>
